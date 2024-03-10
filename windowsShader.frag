@@ -11,21 +11,17 @@ uniform vec4 distribution;
 uniform vec3 color;
 //vec2 decenterNormalized;
 float pixel;
-/*
-float unipolar(float value){
-    return value * 0.5 + 0.5;
-}
 
-vec3 unipolar(vec3 value){
-    return value * 0.5 + 0.5;
-}
-*/
-float getAmplitude(float inA, float inB, float normal){
+float getPan(float inA, float inB, float normal){
     return pow(1.0 - abs(inA - normal) * (1.0 - abs(inA - 0.5)) * inB, inB);
 }
 
-vec2 bipolar(vec2 value){
-    return (value - 0.5) * 2.0;
+float getAmplitude(float pan, float inA, float inB){
+    return pow(pow(pan, inA), 1.0 / inB);
+}
+
+float process(float pre){
+    return pow(pre, 4.0);
 }
 
 void main()
@@ -33,14 +29,24 @@ void main()
     pixel = window.x * window.y;
     vec2 normalized = gl_FragCoord.xy / window;
     //vec2 decenterNormalized = abs(0.5 - normalized) * 2.0;
-    float amplitudeX = getAmplitude(mainParameters[1][1], mainParameters[1][3], normalized.x);
-    float amplitudeY = getAmplitude(mainParameters[1][0], mainParameters[1][2], normalized.y);
-    float amplitude = amplitudeX * amplitudeY;
-    //properly adjust
-    vec4 lowPass = texture2DRect(tex0, texCoordVarying * bipolar(vec2(mainParameters[1][1], mainParameters[1][0])) * window + bipolar(vec2(mainParameters[2][1], mainParameters[2][0])) * window);
-    vec4 highPass = 1.0 - lowPass;
-    vec4 filterColor = mix(highPass * lowPass, mix(highPass, lowPass, extraParameters.x), extraParameters.y);
-    vec4 newColor = vec4(amplitude, amplitude, 0.0, 1.0);
-    outputColor = mix(newColor, filterColor, 1.0 - extraParameters.z);
-    outputColor = newColor;
+    float panX = getPan(mainParameters[2][1], mainParameters[2][3], normalized.x);
+    float panY = getPan(mainParameters[2][0], mainParameters[2][2], normalized.y);
+    float pan = panX * panY;
+    float redPan = getPan(mainParameters[3][0], mainParameters[3][2], pan);
+    float bluePan = getPan(mainParameters[3][1], mainParameters[3][3], pan);
+    float amplitudeX = getAmplitude(pan, mainParameters[1][1], mainParameters[1][3]);
+    float amplitudeY = getAmplitude(pan, mainParameters[1][0], mainParameters[1][2]);
+    float newGreen = amplitudeX * amplitudeY;
+    float newRed = getAmplitude(pow(redPan * newGreen, 0.5), mainParameters[0][0], mainParameters[0][2]);
+    float newBlue = getAmplitude(pow(bluePan * newGreen, 0.5), mainParameters[0][1], mainParameters[0][3]);
+    vec4 redFeedback = texture2DRect(tex0, texCoordVarying * vec2(newRed) * window);
+    vec4 greenFeedback = texture2DRect(tex0, texCoordVarying * vec2(newGreen) * window);
+    vec4 blueFeedback = texture2DRect(tex0, texCoordVarying * vec2(newBlue) * window);
+    vec3 lowPass = vec3(redFeedback.r, greenFeedback.g, blueFeedback.b);
+    vec3 highPass = 1.0 - lowPass;
+    vec3 filterColor = mix(highPass * lowPass, mix(highPass, lowPass, extraParameters.x), extraParameters.y);
+    vec3 newColor = vec3(newRed, newGreen, newBlue);
+    vec3 preProcessed = mix(newColor, filterColor, 1.0 - extraParameters.z);
+    outputColor = vec4(process(preProcessed.r), process(preProcessed.g), process(preProcessed.b), 1.0);
+
 }
