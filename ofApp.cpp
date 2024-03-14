@@ -7,8 +7,9 @@ void ofApp::setup() {
 }
 
 void ofApp::midiSetup() {
-	midiIn.openPort(port);
+	midiIn.openPort(inPort);
 	midiIn.addListener(this);
+	//midiOut.openPort(outPort);
 }
 
 void ofApp::videoSetup() {
@@ -45,14 +46,29 @@ void ofApp::updateParameters() {
 	mainParameters.set(controls[0], controls[1], controls[2], controls[3], controls[4], controls[5], controls[6], controls[7],
 		controls[8], controls[9], controls[10], controls[11], controls[12], controls[13], controls[14], controls[15]);
 	extraParameters.set(controls[16], controls[17], controls[18]);
-	//distribution.set
+	boundaryTotal = 0.0;
+	changeTotal = 0.0;	
+	total = 0.0;
+	for (int a = 0; a < controls.size(); a++) {
+		float totalIncrement = controls[a] / (float)controls.size();
+		float semiTotalIncrement = controls[a] / 8.0;
+		total += totalIncrement;
+		if (a % 4 <= 2) {
+			boundaryTotal += semiTotalIncrement;
+		}
+		else {
+			changeTotal += semiTotalIncrement;
+		}
+	}
+	smooth = (controls[16] + controls[17]) / 2.0;
+	totals.set(boundaryTotal, changeTotal, total, smooth);
 }
 
 void ofApp::setUniforms() {
 	shader.setUniform2f("window", window);
 	shader.setUniformMatrix4f("mainParameters", mainParameters);
 	shader.setUniform3f("extraParameters", extraParameters);
-	shader.setUniform1f("seed", ofRandomf());
+	shader.setUniform4f("totals", totals);
 }
 
 //--------------------------------------------------------------
@@ -61,8 +77,10 @@ void ofApp::newMidiMessage(ofxMidiMessage& message) {
 		int control = message.control;
 		for (int a = 0; a < controlNumbers.size(); a++) {
 			if (control == controlNumbers[a]) {
+				int value = message.value;
 				int controlIndex = a;
-				controls[controlIndex] = (float)(message.value + 1) / 128.0;
+				controls[controlIndex] = (float)(value + 1) / 128.0;
+				//midiOut.sendControlChange(channel, control, value);
 			}
 		}
 	}
